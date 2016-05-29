@@ -93,6 +93,15 @@ def getUser(id,log=False):
 
 
 def greedy_filtering():
+	"""
+	rho is the number of elements in the intersection
+	we have An array of ratings in V, we reshape it for item/movies to get V2
+	then we argsort each movies's rating and store it in V3
+	Then we take top 50 from it and find intersection
+	then at last we find cosine similarity in cmmon elements
+
+	"""
+
 
 	rho = 10
 	V2 = V.reshape(1682,943)
