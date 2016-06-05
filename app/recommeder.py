@@ -1,16 +1,20 @@
+from scipy import spatial
 import numpy as np
 from math import sqrt
 import os, datetime
 import time,json
 import random
-
 import sqlite3
+
+
 db = 'MovieLens.db'
-if not os.path.isfile(db): crt = True
-else: crt = False
-conn = sqlite3.connect(db)
-c = conn.cursor()
-if crt:	c.execute('''CREATE TABLE user_similarity_matrix(userID real, otherID real, similarity real)''')
+USE_DB = True
+if USE_DB :
+	if USE_DB and not os.path.isfile(db): crt = True
+	else: crt = False
+	conn = sqlite3.connect(db)
+	c = conn.cursor()
+	if crt:	c.execute('''CREATE TABLE greedyF_user_similarity_matrix(userID real, otherID real, similarity real)''')
 
 _basedir = os.path.abspath(os.path.dirname('./'))
 # if not __name__ == "__main__":
@@ -21,10 +25,12 @@ def log(x):
 	for q in range(len(x)):
 			print x[q]
 np.set_printoptions(suppress=True)
+np.seterr(divide='ignore', invalid='ignore')
+cosine_similarity = spatial.distance.cosine
 
 
 def loadMovieLens(path='/ml-100k'):
-	# Get movie titles
+	# Get movie titles, we have 1682 movies
 	M = ["" for i in range(0,1682)]
 	MovieInfo = ["" for i in range(0,1682)]
 	M_genere = np.ones((1682,19)).astype(int)
@@ -42,6 +48,7 @@ def loadMovieLens(path='/ml-100k'):
 	for line in open(_basedir + path +'/u.data'):
 		userid, movieid, rating, ts = line.split('\t')
 		V[int(userid) - 1, int(movieid) - 1] = int(rating)
+	# we have 943 users
 	# user id | age | gender | occupation | zip code
 	U = ["" for i in range(0,943)]
 	for line in open(_basedir + path+'/u.user'):
@@ -76,11 +83,11 @@ def getUser(id,log=False):
 	_names_of_rated = M[names.nonzero()]
 	user = U[id]
 	user_string = ("User       : " + str(id+1) + "\n"
-              "Age        : " + str(user[1]) + "\n"
-              "Gender     : " + str(user[2]) + "\n"
-              "Occupation : " + str(user[3]) + "\n"
-              "Zipcode    : " + str(user[4]) + ""
-              )
+			  "Age        : " + str(user[1]) + "\n"
+			  "Gender     : " + str(user[2]) + "\n"
+			  "Occupation : " + str(user[3]) + "\n"
+			  "Zipcode    : " + str(user[4]) + ""
+			  )
 	if(log): print user_string
 	# print  str(_names_of_rated)
 	_names_of_rated = _names_of_rated[:10]
@@ -91,56 +98,122 @@ def getUser(id,log=False):
 # getUser(userid, True)
 
 
+def pearson_similarity(rating1, rating2):
+	sum_xy = 0.0
+	sum_x = 0.0
+	sum_y = 0.0
+	sum_x2 = 0.0
+	sum_y2 = 0.0
+	n = 0
+	# print rating1.nonzero()
+	for key in rating1.nonzero()[0]:
+		if key in rating2.nonzero()[0]:
+			n += 1
+			x = rating1[key]
+			y = rating2[key]
+			sum_xy += x*y
+			sum_x += x
+			sum_y += y
+			sum_x2 += x**2
+			sum_y2 += y**2
+	#if no ratings are in common, we should return 0
+	if n == 0:
+		return 0
+	#now denominator
+	denominator = sqrt(sum_x2 - (sum_x**2) / n) * sqrt(sum_y2 - (sum_y**2) / n)
+	if denominator == 0:
+		return 0
+	else:
+		return (sum_xy - (sum_x * sum_y) / n) / denominator
 
-def greedy_filtering():
+def greedy_filtering(matrix = V, n=0, rho = 10, measure_time=True, minimum_similarity = 0.3, similarity = cosine_similarity, USE_DB = False, top_k_values = 96):
 	"""
-	rho is the number of elements in the intersection
-	we have An array of ratings in V, we reshape it for item/movies to get V2
-	then we argsort each movies's rating and store it in V3
-	Then we take top 50 from it and find intersection
-	then at last we find cosine similarity in cmmon elements
-
+	rho is the number of elements in the intersecting arrays
 	"""
-
-
+	if n == 0: n = matrix.shape[0]
 	rho = 10
-	V2 = V.reshape(1682,943)
-	dimenstion_x = 1682
-	# print V2.shape
-	V3 = ['' for z in xrange(dimenstion_x)]
-	for i in xrange(dimenstion_x):
-	    sorteda = (np.argsort(V2[i]))[::-1]
-	    V3[i] = sorteda
+	range_of_X = n
+	similarity_matrix =  np.zeros(shape=(n,n))
+	auxillary_matrix = [ [] for i in xrange(n)]
+	for i in xrange(n):
+		auxillary_matrix[i] = (np.argsort(matrix[i]))[::-1]
 
-	range_of_users = 1682
-	minimum_similarity = 0.3
-	V4 = [ [] for p in xrange(range_of_users)]
-	V5 = [ [] for p in xrange(range_of_users)]
+	if measure_time:
+		t_graph = []
+		start = time.time()
 
-	for x in xrange(range_of_users-1):
-	    if np.count_nonzero(V2[x]) == 0:
-	        continue
-	    for y in xrange(x+1, range_of_users):
-	        if np.count_nonzero(V2[y]) == 0:
-	            continue
-	        dataSetI  = V3[x][:50]
-	        dataSetII = V3[y][:50]
-	        # print len(np.intersect1d(V3[x][:100],V3[y][:100])) , x , y
-	        intersection = np.intersect1d(dataSetI,dataSetII)
-	        if len(intersection) > rho:
-	            cosi = 1 - spatial.distance.cosine(V2[x][intersection], V2[y][intersection])
-	            if cosi > minimum_similarity:
-	                # print x, y, cosi
-	                V4[x].append(y)
-	                # V5[x].append(cosi)
-	            	V5.append([x,y,cosi])
-	    # print x, len(V4[x]), V5[x]
+	for x in xrange(0,range_of_X):
+		if measure_time and x%100 == 0 :
+			print x, time.time()-start, 's'
+
+		if np.count_nonzero(matrix[x]) == 0:
+			continue
+		for y in xrange(x+1,range_of_X):
+			if np.count_nonzero(matrix[y]) == 0:
+				continue
+			dataSetI  = auxillary_matrix[x][:top_k_values]
+			dataSetII = auxillary_matrix[y][:top_k_values]
+			intersection = np.intersect1d(dataSetI,dataSetII)
+			array_I = matrix[x]
+			array_II = matrix[y]
+			# print intersection
+			if len(intersection) > rho:
+				similarity_score = 1 - similarity(array_I, array_II)
+				if similarity_score > minimum_similarity:
+					if USE_DB :
+						c.execute("INSERT INTO 'greedyF_user_similarity_matrix' VALUES (%d, %d, %f)"%(x, y, similarity_score))
+						c.execute("INSERT INTO 'greedyF_user_similarity_matrix' VALUES (%d, %d, %f)"%(y, x, similarity_score))
+						if x%50 == 0: conn.commit()
+					t_graph.append([x,time.time()-start])
+					similarity_matrix[x][y] = similarity_score
+					similarity_matrix[y][x] = similarity_score
+
+	if measure_time:
+		end = time.time()
+		print "Total: ",end-start,"s"
+		return similarity_matrix , t_graph
+
+	return similarity_matrix
 
 
+def nSquare_user_similarity_matrix(matrix = V, measure_time=True, similarity= cosine_similarity, n=0, minimum_similarity = 0.3, USE_DB = False):
+	""" For n = 100 Avg time is 8.7 secs.
+		For n = 200 Avg time is 32.14 secs.
+		For n = 943 Time is too much ~900secs.
+	"""
+	print 'start'
+	if n == 0: n = matrix.shape[0]
+
+	if measure_time:
+		t_graph = []
+		start = time.time()
+	similarity_matrix = np.zeros(shape=(n,n))
+
+	for userid in range(n):
+		if measure_time and userid%100 == 0:
+			print userid, time.time()-start, 'secs.'
+
+		for other in range(userid + 1, n):
+			# intersection = np.intersect1d(np.nonzero(matrix[userid]),np.nonzero(matrix[other]))
+			# if len(intersection) < 10: continue
+			userN = matrix[userid]
+			otherN = matrix[other]
+			similarity_score = 1 - similarity(userN, otherN)
+			if USE_DB :
+				c.execute("INSERT INTO 'user_similarity_matrix' VALUES (%d, %d, %f)"%(userid, other, similarity_score))
+				c.execute("INSERT INTO 'user_similarity_matrix' VALUES (%d, %d, %f)"%(other, userid, similarity_score))
+				if userid%50 == 0: conn.commit()
+			if similarity_score > minimum_similarity:
+				similarity_matrix[userid][other] = similarity_score
+				similarity_matrix[other][userid] = similarity_score
+				t_graph.append([userid,time.time()-start])
+	if measure_time:
+		print "Total Time Elapsed: ",time.time()-start,"s"
+		return similarity_matrix , t_graph
+	return similarity_matrix
 
 
-
-
+# US = nSquare_user_similarity_matrix()
 
 
 def rated_rankings():
@@ -172,36 +245,7 @@ overall_ranking, M , R, rankings = rated_rankings()
 MovieInfo = MovieInfo[R][::-1]
 
 
-def pearson_similarity(rating1, rating2):
-	sum_xy = 0.0
-	sum_x = 0.0
-	sum_y = 0.0
-	sum_x2 = 0.0
-	sum_y2 = 0.0
-	n = 0
-	# print rating1.nonzero()
-	for key in rating1.nonzero()[0]:
-		if key in rating2.nonzero()[0]:
-			n += 1
-			x = rating1[key]
-			y = rating2[key]
-			sum_xy += x*y
-			sum_x += x
-			sum_y += y
-			sum_x2 += x**2
-			sum_y2 += y**2
-	#if no ratings are in common, we should return 0
-	if n == 0:
-		return 0
-	#now denominator
-	denominator = sqrt(sum_x2 - (sum_x**2) / n) * sqrt(sum_y2 - (sum_y**2) / n)
-	if denominator == 0:
-		return 0
-	else:
-		return (sum_xy - (sum_x * sum_y) / n) / denominator
-
-
-def k_similar_users(ratings, userid, k=10, similarity = pearson_similarity):
+def k_similar_users(ratings, userid, k=10, similarity = cosine_similarity):
 	if k == 0: k = 943
 	scores=[[similarity(ratings[userid], ratings[other]), other] for other in range(0,943) if other!=userid]
 	# Sort the list so the highest scores appear at the top
@@ -211,31 +255,6 @@ def k_similar_users(ratings, userid, k=10, similarity = pearson_similarity):
 
 # kkk = k_similar_users(V, userid, k=10)
 # print "userids of similar Users to selected user and their similarity score: "
-
-def calulate_user_similarity_matrix(V=V, similarity= pearson_similarity, n=0):
-	""" For n = 100 Avg time is 8.7 secs.
-		For n = 200 Avg time is 32.14 secs.
-		For n = 943 Time is too much ~900secs.
-	"""
-	start = time.clock()
-	if n == 0: n = V.shape[0]
-	US = np.zeros((n,n))
-	for userid in range(n):
-		print userid, time.clock()-start
-		for other in range(userid + 1, n):
-			score = similarity(V[userid], V[other])
-			# print "score bw user %d and %d is %f" % (userid, other,score)
-			c.execute("INSERT INTO 'user_similarity_matrix' VALUES (%d, %d, %f)"%(userid, other, score))
-			c.execute("INSERT INTO 'user_similarity_matrix' VALUES (%d, %d, %f)"%(other, userid, score))
-			US[userid, other] = score
-			US[other, userid] = score
-		if userid%50 == 0: conn.commit()
-	end = time.clock()
-	print "Total: ",end-start,"s"
-	return US
-
-
-# US = calulate_user_similarity_matrix()
 
 def get_similar_users(userid,k=50):
 	c.execute("SELECT * FROM user_similarity_matrix WHERE userID=%d AND otherID!=%d ORDER BY similarity DESC LIMIT %d;"%(userid, userid, k))
@@ -277,6 +296,19 @@ def getRecommendations(V, userid, SU):
 	final = [y for x, y in final_scores]
 	return M[final][:10]
 
+
+def find_k_similar_users(similarity_matrix, k = 20):
+	similarUsers = [[] for q in xrange(len(similarity_matrix))]
+	for x in xrange(len(similarity_matrix)):
+		for y in xrange(len(similarity_matrix[x])):
+			# print similarity_matrix[x][y]
+			if similarity_matrix[x][y] > 0:
+				similarUsers[x].append([similarity_matrix[x][y],y])
+		similarUsers[x].sort()
+		similarUsers[x] = similarUsers[x][::-1][:k]
+	return similarUsers
+
+
 # movies by genres
 Movie_by_generes = {}
 for w in xrange(len(Movie_generes)):
@@ -288,25 +320,13 @@ for movie in xrange(len(MovieInfo)):
 		Movie_by_generes[g].append(MovieInfo[movie]['movieId'])
 
 def dot_product(v1, v2):
-    return sum(map(lambda x: x[0] * x[1], izip(v1, v2)))
+	return sum(map(lambda x: x[0] * x[1], izip(v1, v2)))
 
 def cosine_measure(v1, v2):
-    prod = dot_product(v1, v2)
-    len1 = math.sqrt(dot_product(v1, v1))
-    len2 = math.sqrt(dot_product(v2, v2))
-    return prod / (len1 * len2)
-
-
-
-
-
-
-
-
-
-
-
-
+	prod = dot_product(v1, v2)
+	len1 = math.sqrt(dot_product(v1, v1))
+	len2 = math.sqrt(dot_product(v2, v2))
+	return prod / (len1 * len2)
 
 
 if __name__ == "__main__":
@@ -318,6 +338,8 @@ if __name__ == "__main__":
 	print "Movies recommendations for current user, based on his prefrences "
 	print "\n".join(final_reccom)
 
+	if USE_DB:
+		conn.commit()
+		conn.close()
+
 # Always last line
-conn.commit()
-conn.close()
