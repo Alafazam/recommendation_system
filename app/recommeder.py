@@ -1,6 +1,7 @@
 from scipy import spatial
-import numpy as np
 from math import sqrt
+from utils import *
+import numpy as np
 import os, datetime
 import time,json
 import random
@@ -8,7 +9,7 @@ import sqlite3
 
 
 db = 'MovieLens.db'
-USE_DB = True
+USE_DB =False
 if USE_DB :
 	if USE_DB and not os.path.isfile(db): crt = True
 	else: crt = False
@@ -17,8 +18,9 @@ if USE_DB :
 	if crt:	c.execute('''CREATE TABLE greedyF_user_similarity_matrix(userID real, otherID real, similarity real)''')
 
 _basedir = os.path.abspath(os.path.dirname('./'))
-# if not __name__ == "__main__":
-# 	_basedir +="/app"
+
+if not __name__ == "__main__":
+	_basedir +="/app"
 
 
 def log(x):
@@ -26,28 +28,38 @@ def log(x):
 			print x[q]
 np.set_printoptions(suppress=True)
 np.seterr(divide='ignore', invalid='ignore')
-cosine_similarity = spatial.distance.cosine
+
+def cosine_similarity(v1,v2):
+ return 1 - spatial.distance.cosine(v1,v2)
+
+
+def loadGeneres(path='/ml-100k'):
+	All_generes = []
+	for line in open(_basedir + path+'/u.genre'):
+		genre , genreId = line.split('|')
+		All_generes.append(genre)
+	return np.array(All_generes)
+
+Movie_generes = loadGeneres()
 
 
 def loadMovieLens(path='/ml-100k'):
-	# Get movie titles, we have 1682 movies
-	M = ["" for i in range(0,1682)]
-	MovieInfo = ["" for i in range(0,1682)]
-	M_genere = np.ones((1682,19)).astype(int)
-
-	for line in open(_basedir + path +'/u.item'):
-		data_array = line.rstrip('\n').split('|')
-		movieid, title = data_array[0:2]
-		# date = data_array[2]
-		genre = np.array(data_array[5:]).astype(int)
-		M_genere[int(movieid) - 1] = genre
-		MovieInfo[int(movieid) - 1] = {'name': data_array[1].decode('cp1252'),'imdbUrl': data_array[4], 'genre': np.array(genre), 'movieId': int(movieid) -1 }
-		M[int(movieid) - 1] = str(title)
 	# Load data
 	V = np.zeros((943, 1682)).astype(int)
 	for line in open(_basedir + path +'/u.data'):
 		userid, movieid, rating, ts = line.split('\t')
 		V[int(userid) - 1, int(movieid) - 1] = int(rating)
+	# Get movie titles, we have 1682 movies
+	M = ["" for i in range(0,1682)]
+	ALL_MOVIES = []
+	MovieInfo = ["" for i in range(0,1682)]
+	for line in open(_basedir + path +'/u.item'):
+		data_array = line.rstrip('\n').split('|')
+		movieid, title = data_array[0:2]
+		genre = np.array(data_array[5:]).astype(int)
+		a_movie = Movie({'name': data_array[1],'imdbUrl': data_array[4], 'genre': np.array(genre), 'movieId': int(movieid) -1 })
+		ALL_MOVIES.append(a_movie)
+		M[int(movieid) - 1] = str(title)
 	# we have 943 users
 	# user id | age | gender | occupation | zip code
 	U = ["" for i in range(0,943)]
@@ -61,15 +73,11 @@ def loadMovieLens(path='/ml-100k'):
 		occupations = line
 		Occu[i] = occupations
 		i+=1
-	All_generes = []
-	for line in open(_basedir + path+'/u.genre'):
-		genre , genreId = line.split('|')
-		All_generes.append(genre)
 
-	return V, np.array(M), np.array(U), np.array(Occu), np.array(M_genere) , np.array(MovieInfo), np.array(All_generes)
+	return V, np.array(M), np.array(U), np.array(Occu), np.array(ALL_MOVIES)
 
 
-V, M, U, O, M_genere, MovieInfo, Movie_generes = loadMovieLens()
+V, MovieNames , U, O, ALL_MOVIES = loadMovieLens()
 
 # userid = random.randrange(0, 943)
 
@@ -77,10 +85,9 @@ V, M, U, O, M_genere, MovieInfo, Movie_generes = loadMovieLens()
 def getUser(id,log=False):
 	id = id-1
 	mrated = V[id]
-	names = np.ones(1682).astype(int)
-	for x in range(len(mrated)):
-		if mrated[int(x)] == 0 : names[x] = 0
-	_names_of_rated = M[names.nonzero()]
+	n = V.shape[1]
+	_movies = [ ALL_MOVIES[movieId] for movieId in range(n) if V[id][movieId]>0 ]
+	# _names_of_rated = [x.getinfo() for x in _movies]
 	user = U[id]
 	user_string = ("User       : " + str(id+1) + "\n"
 			  "Age        : " + str(user[1]) + "\n"
@@ -88,12 +95,12 @@ def getUser(id,log=False):
 			  "Occupation : " + str(user[3]) + "\n"
 			  "Zipcode    : " + str(user[4]) + ""
 			  )
-	if(log): print user_string
-	# print  str(_names_of_rated)
-	_names_of_rated = _names_of_rated[:10]
-	print "Movies rated by selected user "
-	print "\n".join(_names_of_rated)
-	print "    "
+	if(log):
+		print user_string
+		print "Movies rated by selected user "
+		print _movies[:10]
+		print "    "
+	return _movies, user_string
 
 # getUser(userid, True)
 
@@ -126,7 +133,7 @@ def pearson_similarity(rating1, rating2):
 	else:
 		return (sum_xy - (sum_x * sum_y) / n) / denominator
 
-def greedy_filtering(matrix = V, n=0, rho = 10, measure_time=True, minimum_similarity = 0.3, similarity = cosine_similarity, USE_DB = False, top_k_values = 96):
+def greedy_filtering(matrix = V, n=0, rho = 50, measure_time=True, minimum_similarity = 0.3, similarity = cosine_similarity, USE_DB = False, top_k_values = 96):
 	"""
 	rho is the number of elements in the intersecting arrays
 	"""
@@ -134,9 +141,7 @@ def greedy_filtering(matrix = V, n=0, rho = 10, measure_time=True, minimum_simil
 	rho = 10
 	range_of_X = n
 	similarity_matrix =  np.zeros(shape=(n,n))
-	auxillary_matrix = [ [] for i in xrange(n)]
-	for i in xrange(n):
-		auxillary_matrix[i] = (np.argsort(matrix[i]))[::-1]
+	auxillary_matrix = [ set((np.argsort(matrix[i]))[::-1][:top_k_values]) for i in xrange(n)]
 
 	if measure_time:
 		t_graph = []
@@ -145,26 +150,24 @@ def greedy_filtering(matrix = V, n=0, rho = 10, measure_time=True, minimum_simil
 	for x in xrange(0,range_of_X):
 		if measure_time and x%100 == 0 :
 			print x, time.time()-start, 's'
+			t_graph.append([x,time.time()-start])
 
-		if np.count_nonzero(matrix[x]) == 0:
-			continue
+		# if np.count_nonzero(matrix[x]) == 0:continue
 		for y in xrange(x+1,range_of_X):
-			if np.count_nonzero(matrix[y]) == 0:
-				continue
-			dataSetI  = auxillary_matrix[x][:top_k_values]
-			dataSetII = auxillary_matrix[y][:top_k_values]
-			intersection = np.intersect1d(dataSetI,dataSetII)
+			# if np.count_nonzero(matrix[y]) == 0:continue
+			dataSetI  = auxillary_matrix[x]
+			dataSetII = auxillary_matrix[y]
+			intersection = dataSetI.intersection(dataSetII)
 			array_I = matrix[x]
 			array_II = matrix[y]
 			# print intersection
 			if len(intersection) > rho:
-				similarity_score = 1 - similarity(array_I, array_II)
+				similarity_score = similarity(array_I, array_II)
 				if similarity_score > minimum_similarity:
 					if USE_DB :
 						c.execute("INSERT INTO 'greedyF_user_similarity_matrix' VALUES (%d, %d, %f)"%(x, y, similarity_score))
 						c.execute("INSERT INTO 'greedyF_user_similarity_matrix' VALUES (%d, %d, %f)"%(y, x, similarity_score))
 						if x%50 == 0: conn.commit()
-					t_graph.append([x,time.time()-start])
 					similarity_matrix[x][y] = similarity_score
 					similarity_matrix[y][x] = similarity_score
 
@@ -176,13 +179,16 @@ def greedy_filtering(matrix = V, n=0, rho = 10, measure_time=True, minimum_simil
 	return similarity_matrix
 
 
-def nSquare_user_similarity_matrix(matrix = V, measure_time=True, similarity= cosine_similarity, n=0, minimum_similarity = 0.3, USE_DB = False):
+def nSquare_user_similarity_matrix(matrix = V, measure_time=True, similarity= pearson_similarity, n=0, minimum_similarity = 0.3, USE_DB = False):
 	""" For n = 100 Avg time is 8.7 secs.
 		For n = 200 Avg time is 32.14 secs.
 		For n = 943 Time is too much ~900secs.
 	"""
-	print 'start'
+
 	if n == 0: n = matrix.shape[0]
+
+	# if similarity == pearson_similarity:
+	# 	n = 200
 
 	if measure_time:
 		t_graph = []
@@ -190,15 +196,20 @@ def nSquare_user_similarity_matrix(matrix = V, measure_time=True, similarity= co
 	similarity_matrix = np.zeros(shape=(n,n))
 
 	for userid in range(n):
-		if measure_time and userid%100 == 0:
-			print userid, time.time()-start, 'secs.'
+		if measure_time and userid%100 == 0 and similarity == cosine_similarity:
+			print userid, time.time()-start, 's.'
+			t_graph.append([userid,time.time()-start])
+
+		if measure_time and userid%20 == 0 and similarity == pearson_similarity :
+			print userid, time.time()-start, 's.'
+			t_graph.append([userid,time.time()-start])
 
 		for other in range(userid + 1, n):
 			# intersection = np.intersect1d(np.nonzero(matrix[userid]),np.nonzero(matrix[other]))
 			# if len(intersection) < 10: continue
 			userN = matrix[userid]
 			otherN = matrix[other]
-			similarity_score = 1 - similarity(userN, otherN)
+			similarity_score = similarity(userN, otherN)
 			if USE_DB :
 				c.execute("INSERT INTO 'user_similarity_matrix' VALUES (%d, %d, %f)"%(userid, other, similarity_score))
 				c.execute("INSERT INTO 'user_similarity_matrix' VALUES (%d, %d, %f)"%(other, userid, similarity_score))
@@ -206,7 +217,6 @@ def nSquare_user_similarity_matrix(matrix = V, measure_time=True, similarity= co
 			if similarity_score > minimum_similarity:
 				similarity_matrix[userid][other] = similarity_score
 				similarity_matrix[other][userid] = similarity_score
-				t_graph.append([userid,time.time()-start])
 	if measure_time:
 		print "Total Time Elapsed: ",time.time()-start,"s"
 		return similarity_matrix , t_graph
@@ -216,33 +226,34 @@ def nSquare_user_similarity_matrix(matrix = V, measure_time=True, similarity= co
 # US = nSquare_user_similarity_matrix()
 
 
-def rated_rankings():
-	V2 = V.reshape(1682,943)
-	# V3 = np.sum(V2,axis=1)
-	arv = []
-	maxz = -1
-	imaxz = -1
-	for x in xrange(0,1682):
-		asum = float(np.sum(V2[x]))
-		n = float(len(V2[x].nonzero()[0]))
-		if n != 0: rat = asum/n
-		else: rat = 0
-		arv.append(rat)
-		if rat > maxz:
-			maxz = rat
-			imaxz = x
-	# print arv[imaxz]
-	arv = np.array(arv)
-	# print np.amax(arv)
-	M2 = np.around(arv,decimals=3)
-	R = arv.argsort()
-	M3 = M2[R][::-1]
-	# for x in xrange(0, 1682):
-	# 	M[x] = M[x] + "  |  " + str(M2[x])
-	return M3, M[R][::-1], R, M2
+# def rated_rankings():
 
-overall_ranking, M , R, rankings = rated_rankings()
-MovieInfo = MovieInfo[R][::-1]
+# 	V2 = V.reshape(1682,943)
+# 	# V3 = np.sum(V2,axis=1)
+# 	arv = []
+# 	maxz = -1
+# 	imaxz = -1
+# 	for x in xrange(0,1682):
+# 		asum = float(np.sum(V2[x]))
+# 		n = float(len(V2[x].nonzero()[0]))
+# 		if n != 0: rat = asum/n
+# 		else: rat = 0
+# 		arv.append(rat)
+# 		if rat > maxz:
+# 			maxz = rat
+# 			imaxz = x
+# 	# print arv[imaxz]
+# 	arv = np.array(arv)
+# 	# print np.amax(arv)
+# 	M2 = np.around(arv,decimals=3)
+# 	R = arv.argsort()
+# 	M3 = M2[R][::-1]
+# 	# for x in xrange(0, 1682):
+# 	# 	MovieNames[x] = MovieNames[x] + "  |  " + str(M2[x])
+# 	return M3, MovieNames[R][::-1], R, M2
+
+# overall_ranking, MovieNames , R, rankings = rated_rankings()
+# ALL_MOVIES = ALL_MOVIES[R][::-1]
 
 
 def k_similar_users(ratings, userid, k=10, similarity = cosine_similarity):
@@ -294,7 +305,7 @@ def getRecommendations(V, userid, SU):
 	final_scores.sort()
 	final_scores.reverse()
 	final = [y for x, y in final_scores]
-	return M[final][:10]
+	return MovieNames[final][:10]
 
 
 def find_k_similar_users(similarity_matrix, k = 20):
@@ -309,15 +320,18 @@ def find_k_similar_users(similarity_matrix, k = 20):
 	return similarUsers
 
 
+for z in ALL_MOVIES:
+	z.setRatings(V)
+
 # movies by genres
 Movie_by_generes = {}
-for w in xrange(len(Movie_generes)):
-	Movie_by_generes[Movie_generes[w]] = []
+for w in Movie_generes:
+	Movie_by_generes[w] = []
 
-for movie in xrange(len(MovieInfo)):
-	_genres = Movie_generes[MovieInfo[movie]['genre']>0]
+for movie in ALL_MOVIES:
+	_genres = Movie_generes[movie.genre > 0]
 	for g in _genres:
-		Movie_by_generes[g].append(MovieInfo[movie]['movieId'])
+		Movie_by_generes[g].append(movie)
 
 def dot_product(v1, v2):
 	return sum(map(lambda x: x[0] * x[1], izip(v1, v2)))
