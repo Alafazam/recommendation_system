@@ -3,8 +3,8 @@ import os, datetime
 
 _basedir = os.path.abspath(os.path.dirname('./'))
 
-if not __name__ == "__main__":
-	_basedir +="/app"
+# if not __name__ == "__main__":
+	# _basedir +="/app"
 
 
 def overallRating(x):

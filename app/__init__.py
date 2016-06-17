@@ -49,14 +49,17 @@ def movie_movieId(movieId):
 def test():
 	return render_template('test.html',data=MovieNames)
 
-@app.route('/login/<int:userID>')
-def login_with_userId(userI):
-	userID = userI
-	return render_template('index.html',message='Logged in')
+# @app.route('/login/<int:userI>')
+# def login_with_userId(userI):
+# 	userID = userI
+# 	return render_template('index.html',message='Logged in')
 
-@app.route('/user/<int:userI>')
-def user_details(userI):
-	_names_of_rated, user_string = getUser(userI,True)
+
+
+@app.route('/user')
+def user_details():
+	userI = int(request.args.get('userid', userID))
+	_names_of_rated, user_string = getUser(userI)
 	return render_template('test.html',data=_names_of_rated, datax=user_string)
 
 # Movie_by_generes
