@@ -28,19 +28,14 @@ def log(x):
 np.set_printoptions(suppress=True)
 np.seterr(divide='ignore', invalid='ignore')
 
-def getUser(id,log=False):
-	id = id-1
-	mrated = V[id]
+def displayUser(id,log=False):
+	userID = id - 1
+	mrated = V[userID]
 	n = V.shape[1]
-	_movies = [ ALL_MOVIES[movieId] for movieId in range(n) if V[id][movieId]>0 ]
+	_movies = [ ALL_MOVIES[movieId] for movieId in range(n) if V[userID][movieId]>0 ]
 	# _names_of_rated = [x.getinfo() for x in _movies]
-	user = U[id]
-	user_string = ("User       : " + str(id+1) + "\n"
-			  "Age        : " + str(user[1]) + "\n"
-			  "Gender     : " + str(user[2]) + "\n"
-			  "Occupation : " + str(user[3]) + "\n"
-			  "Zipcode    : " + str(user[4]) + ""
-			  )
+	user = U[userID]
+	user_string = "User:   %s.\nAge  :%s.\nGender  :%s.\nOccupation  :%s.\nZipcode  %s"%(str(userID+1), str(user[1]), str(user[2]), str(user[3]), str(user[4]))
 	if(log):
 		print user_string
 		print "Movies rated by selected user "
@@ -48,45 +43,8 @@ def getUser(id,log=False):
 		print "    "
 	return _movies, user_string
 
-# getUser(userid, True)
+# displayUser(userid, True)
 
-# def rated_rankings():
-
-# 	V2 = V.reshape(1682,943)
-# 	# V3 = np.sum(V2,axis=1)
-# 	arv = []
-# 	maxz = -1
-# 	imaxz = -1
-# 	for x in xrange(0,1682):
-# 		asum = float(np.sum(V2[x]))
-# 		n = float(len(V2[x].nonzero()[0]))
-# 		if n != 0: rat = asum/n
-# 		else: rat = 0
-# 		arv.append(rat)
-# 		if rat > maxz:
-# 			maxz = rat
-# 			imaxz = x
-# 	# print arv[imaxz]
-# 	arv = np.array(arv)
-# 	# print np.amax(arv)
-# 	M2 = np.around(arv,decimals=3)
-# 	R = arv.argsort()
-# 	M3 = M2[R][::-1]
-# 	# for x in xrange(0, 1682):
-# 	# 	MovieNames[x] = MovieNames[x] + "  |  " + str(M2[x])
-# 	return M3, MovieNames[R][::-1], R, M2
-
-# overall_ranking, MovieNames , R, rankings = rated_rankings()
-# ALL_MOVIES = ALL_MOVIES[R][::-1]
-
-
-def k_similar_users(ratings, userid, k=10, similarity = cosine_similarity):
-	if k == 0: k = 943
-	scores=[[similarity(ratings[userid], ratings[other]), other] for other in range(0,943) if other!=userid]
-	# Sort the list so the highest scores appear at the top
-	scores.sort()
-	scores.reverse()
-	return scores[0: k]
 
 def find_k_similar_users(similarity_matrix, k = 20):
 	similarUsers = [[] for q in xrange(len(similarity_matrix))]
@@ -109,9 +67,6 @@ def get_k_similar_users(similarity_matrix, userID, k = 20):
 	return similarUsers
 
 
-
-# kkk = k_similar_users(V, userid, k=10)
-# print "userids of similar Users to selected user and their similarity score: "
 
 def get_similar_users_from_DB(userid,k=50):
 	c.execute("SELECT * FROM user_similarity_matrix WHERE userID=%d AND otherID!=%d ORDER BY similarity DESC LIMIT %d;"%(userid, userid, k))
@@ -154,16 +109,24 @@ def getRecommendations(V, userid, SU):
 	return ALL_MOVIES[final][:10]
 
 
-def find_k_similar_users(similarity_matrix, k = 20):
-	similarUsers = [[] for q in xrange(len(similarity_matrix))]
-	for x in xrange(len(similarity_matrix)):
-		for y in xrange(len(similarity_matrix[x])):
-			# print similarity_matrix[x][y]
-			if similarity_matrix[x][y] > 0:
-				similarUsers[x].append([similarity_matrix[x][y],y])
-		similarUsers[x].sort()
-		similarUsers[x] = similarUsers[x][::-1][:k]
-	return similarUsers
+
+def RCF(matrix, userID, Q, k=30):
+	ratings_by_user = np.array(matrix[userID])
+	I_R = [ i for i in range(len(raings_by_user)) if raings_by_user[i] > 0]
+	I_U = [ i for i in range(len(raings_by_user)) if raings_by_user[i] == 0]
+
+	S = [ [] for i in range(len(I_U))]
+
+	for i in range(len(ratings_by_user)):
+		if i in I_R:
+			for j, sim_j in Q[i]:
+				S[j].append([sim_j,i])
+			S[j].sort()
+			S[j] = S[j][::-1]
+		if i in I_U:
+			if len(S[i]) > k:
+				S[i] = S[i][:k]
+	return S
 
 
 for z in ALL_MOVIES:
@@ -182,7 +145,7 @@ for movie in ALL_MOVIES:
 
 if __name__ == "__main__":
 	userid = random.randrange(0, 943)
-	getUser(userid, True)
+	displayUser(userid, True)
 	# kkk = k_similar_users(V, userid, k=10)
 	# SU = get_similar_users_from_DB(userid)
 	US1, time_graph = greedy_filtering(matrix=V,similarity=cosine_similarity)

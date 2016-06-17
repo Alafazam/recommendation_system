@@ -54,10 +54,9 @@ def LoadOccupations(path='/ml-100k'):
 		occupation.append(line)
 	return occupation
 
-V = LoadRatings()
+V_original = LoadRatings()
 U = LoadUsers()
 ALL_MOVIES = LoadMovies()
 Movie_generes = LoadGeneres()
 
-
-V = TF_IDF_normalize_ratings(V)
+V = TF_IDF_normalize_ratings(V_original)

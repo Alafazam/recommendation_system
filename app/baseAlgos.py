@@ -155,6 +155,7 @@ def greedy_filtering(matrix,rho = 300, measure_time=True, minimum_similarity = 0
 					similarity_matrix[x][y] = similarity_score
 	for vi in range(n_V):
 		Q[vi].sort()
+		Q[vi] = Q[vi][::-1]
 	return similarity_matrix, Q
 
 
