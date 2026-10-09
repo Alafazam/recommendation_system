@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+    <title>User {{ user_id }} – Recommendations</title>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" type="text/css" href="/static/stylesheets/materialize.min.css" />
+</head>
+<body>
+    <div class="container">
+        <h4>User {{ user_id }}</h4>
+        <pre>{{ user_string }}</pre>
+        <h5>Recommendations (from platform)</h5>
+        <ul class="collection">
+            {% for movie in recommendations %}
+            <li class="collection-item"><a href="/movie/{{ movie.movieId }}">{{ movie.name }}</a></li>
+            {% else %}
+            <li class="collection-item">No recommendations.</li>
+            {% endfor %}
+        </ul>
+        <a href="/" class="btn teal">Home</a> <a href="/movies" class="btn teal">All movies</a>
+    </div>
+</body>
+</html>

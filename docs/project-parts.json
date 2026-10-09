@@ -1,0 +1,13 @@
+{
+  "repository_type": "monolith",
+  "parts": [
+    {
+      "part_id": "app",
+      "project_type_id": "backend",
+      "display_name": "Python Flask (server-rendered web)",
+      "root_path": ".",
+      "entry_point": "server.py"
+    }
+  ],
+  "integration_points": []
+}

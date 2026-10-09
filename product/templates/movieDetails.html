@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head>
+    <title>{{ movie.name }}</title>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" type="text/css" href="/static/stylesheets/materialize.min.css" />
+</head>
+<body>
+    <div class="container">
+        <h4>{{ movie.name }}</h4>
+        <p><strong>ID:</strong> {{ movie.movieId }}</p>
+        {% if movie.imdbUrl %}<p><a href="{{ movie.imdbUrl }}" target="_blank">IMDb</a></p>{% endif %}
+        {% if movie.genres %}<p><strong>Genres:</strong> {{ movie.genres | join(", ") }}</p>{% endif %}
+        <a href="/movies" class="btn teal">Back to movies</a>
+    </div>
+</body>
+</html>

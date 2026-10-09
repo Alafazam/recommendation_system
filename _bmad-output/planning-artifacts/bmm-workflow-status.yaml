@@ -1,0 +1,28 @@
+# BMM Workflow Status - recommendation_system
+# Track: BMad Method (brownfield)
+# Run workflow-status to see "what should I do now?"
+
+generated: "2026-02-07"
+project: "recommendation_system"
+project_type: "BMad Method"
+selected_track: "bmad-method"
+field_type: "brownfield"
+workflow_path: "method-brownfield.yaml"
+
+workflow_status:
+  # Phase 0 - Documentation (brownfield prerequisite)
+  document-project: docs/index.md
+  # Phase 1 - Analysis (optional)
+  brainstorm-project: optional
+  research: optional
+  product-brief: optional
+  # Phase 2 - Planning
+  prd: required
+  create-ux-design: conditional
+  # Phase 3 - Solutioning
+  create-architecture: required
+  create-epics-and-stories: required
+  test-design: optional
+  implementation-readiness: required
+  # Phase 4 - Implementation
+  sprint-planning: required

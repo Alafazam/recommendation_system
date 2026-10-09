@@ -60,3 +60,7 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+
+# macOS and local runtime databases
+.DS_Store
+*.db

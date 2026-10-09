@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+    <title>Movies</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <link rel="stylesheet" type="text/css" href="/static/stylesheets/materialize.min.css" />
+    <style>
+        .movie-name { width: 50%; display: inline-block; }
+        .movie-rating { width: 30%; display: inline-block; }
+        .genre { text-decoration: underline; font-size: small; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <ul class="collection with-header">
+            <li class="collection-header"><h4 class="center">Movies</h4></li>
+            <li class="collection-item">
+                <div class="movie-name"><b>Movie name</b></div>
+                <div class="movie-rating"><b>Rating</b></div>
+            </li>
+            {% for movie in movies %}
+            <li class="collection-item">
+                <div class="movie-name"><a href="/movie/{{ movie.movieId }}">{{ movie.name }}</a></div>
+                <div class="movie-rating">{{ movie.overallRating }}</div>
+                <div>{% for g in (movie.genres or []) %} <span class="genre"><a href="/genres/{{ g }}">{{ g }}</a></span> {% endfor %}</div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="row center">
+        <a href="/" class="btn waves-effect waves-light teal lighten-1">Home</a>
+    </div>
+</body>
+</html>
